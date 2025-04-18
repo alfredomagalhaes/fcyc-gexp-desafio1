@@ -14,10 +14,14 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type Currence struct {
+type Currency struct {
 	Code string `json:"code"`
 	Name string `json:"name"`
 	Bid  string `json:"bid"`
+}
+
+type CurrencyResponse struct {
+	Bid float64 `json:"bid"`
 }
 
 const databaseFile string = "quotations.db"
@@ -50,6 +54,8 @@ func main() {
 
 func getDollarPriceHandler(w http.ResponseWriter, r *http.Request) {
 	ctxReq, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	var dataResponse CurrencyResponse
+
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctxReq, http.MethodGet, "https://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
 	if err != nil {
@@ -80,12 +86,20 @@ func getDollarPriceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	price := getPrice(dollarResponse)
 	savePriceToDb(price)
+
+	dataResponse.Bid = price
+	dollarResponse, err = json.Marshal(dataResponse)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(dollarResponse)
 
 }
 func getPrice(buffer []byte) float64 {
-	var quoteMap map[string]Currence
+	var quoteMap map[string]Currency
 	var price float64
 	err := json.Unmarshal(buffer, &quoteMap)
 	if err != nil {
